@@ -1,0 +1,15 @@
+{
+  "e3f32d1f-11d6-448d-89cb-9f308baf9093": {
+    "id": "e3f32d1f-11d6-448d-89cb-9f308baf9093",
+    "name": "pro",
+    "model": "PS5",
+    "rental_price": 40,
+    "sale_price": 0,
+    "show_photo_in_bot": true,
+    "games": [
+      "sas"
+    ],
+    "status": "available",
+    "created_at": "2025-12-19T14:27:06.359945"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "31a58d38-ec27-4946-9fd0-371b6fa98ae3": {
+    "id": "31a58d38-ec27-4946-9fd0-371b6fa98ae3",
+    "username": "admin",
+    "password": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+    "full_name": "Администратор",
+    "role": "owner",
+    "permissions": [
+      "all"
+    ],
+    "created_at": "2025-12-19T15:02:45.654054"
+  },
+  "ef48677a-b1a9-4130-888a-9584dd0b7706": {
+    "id": "ef48677a-b1a9-4130-888a-9584dd0b7706",
+    "username": "iulian.terentii@usarb.md",
+    "password": "b5733cd66fe0e726e811c1f3df9770c7916552a970120ab81c01606b4b2ab445",
+    "full_name": "lol",
+    "role": "staff",
+    "permissions": [
+      "consoles",
+      "rentals"
+    ],
+    "created_at": "2025-12-19T15:05:24.293136"
+  }
+}

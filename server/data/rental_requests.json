@@ -1,0 +1,38 @@
+{
+  "6c103766-a448-4870-8206-5e2c8e6422bd": {
+    "id": "6c103766-a448-4870-8206-5e2c8e6422bd",
+    "user_id": "7713040175",
+    "console_id": "e3f32d1f-11d6-448d-89cb-9f308baf9093",
+    "selected_hours": 2,
+    "status": "rejected",
+    "created_at": "2025-12-19T14:30:33.025536",
+    "updated_at": "2025-12-19T14:32:24.808486"
+  },
+  "530799b4-14fe-47d9-bc85-51a00c6277c9": {
+    "id": "530799b4-14fe-47d9-bc85-51a00c6277c9",
+    "user_id": "7713040175",
+    "console_id": "e3f32d1f-11d6-448d-89cb-9f308baf9093",
+    "selected_hours": 5,
+    "status": "rejected",
+    "created_at": "2025-12-19T14:34:32.018952",
+    "updated_at": "2025-12-19T14:34:53.952903"
+  },
+  "bc23c0a0-f592-405f-9019-611c82625fd0": {
+    "id": "bc23c0a0-f592-405f-9019-611c82625fd0",
+    "user_id": "7713040175",
+    "console_id": "e3f32d1f-11d6-448d-89cb-9f308baf9093",
+    "selected_hours": 6,
+    "status": "approved",
+    "created_at": "2025-12-19T14:35:03.979576",
+    "updated_at": "2025-12-19T14:35:33.956370"
+  },
+  "b9d4a462-a5bf-4a24-8d6f-4a2377789668": {
+    "id": "b9d4a462-a5bf-4a24-8d6f-4a2377789668",
+    "user_id": "7713040175",
+    "console_id": "e3f32d1f-11d6-448d-89cb-9f308baf9093",
+    "selected_hours": 1,
+    "status": "rejected",
+    "created_at": "2025-12-19T15:04:26.405502",
+    "updated_at": "2025-12-19T15:04:50.550516"
+  }
+}
