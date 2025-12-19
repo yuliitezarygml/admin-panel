@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from core.database import db, RENTAL_REQUESTS_FILE, RENTALS_FILE, CONSOLES_FILE, USERS_FILE
+from core.database import db, RENTAL_REQUESTS_FILE, RENTALS_FILE, CONSOLES_FILE, USERS_FILE, DISCOUNTS_FILE, ADMIN_USERS_FILE
 from bot.bot_core import get_bot
 import uuid
 from datetime import datetime, timedelta
@@ -49,6 +49,12 @@ def request_action():
         req['status'] = 'approved'
         req['updated_at'] = datetime.now().isoformat()
         
+        # Get current discount
+        today = datetime.now().strftime('%Y-%m-%d')
+        discounts = db.load(DISCOUNTS_FILE)
+        day_rule = discounts.get(today, {})
+        discount_pct = day_rule.get('value', 0) if day_rule.get('type') == 'discount' else 0
+        
         # Create rental
         rental_id = str(uuid.uuid4())
         hours = req.get('selected_hours', 24)
@@ -59,13 +65,36 @@ def request_action():
             'start_time': datetime.now().isoformat(),
             'expected_end_time': (datetime.now() + timedelta(hours=hours)).isoformat(),
             'status': 'active',
-            'total_cost': 0 # Will be calculated at end
+            'discount_percent': discount_pct,
+            'total_cost': 0
         }
         rentals[rental_id] = rental
         consoles[console_id]['status'] = 'rented'
         
         db.save(RENTALS_FILE, rentals)
         db.save(CONSOLES_FILE, consoles)
+        
+        # Track Admin Activity
+        admin_id = data.get('admin_id')
+        if admin_id:
+            req['processed_by'] = admin_id
+            admins = db.load(ADMIN_USERS_FILE)
+            if admin_id in admins:
+                stats = admins[admin_id].get('stats', {
+                    'total_processed_requests': 0,
+                    'total_processed_kyc': 0,
+                    'daily_actions': {}
+                })
+                stats['total_processed_requests'] = stats.get('total_processed_requests', 0) + 1
+                
+                today = datetime.now().strftime('%Y-%m-%d')
+                daily = stats.get('daily_actions', {})
+                daily[today] = daily.get(today, 0) + 1
+                stats['daily_actions'] = daily
+                
+                admins[admin_id]['stats'] = stats
+                db.save(ADMIN_USERS_FILE, admins)
+
         db.save(RENTAL_REQUESTS_FILE, requests)
         
         # Notify user
@@ -81,6 +110,28 @@ def request_action():
     elif action == 'reject':
         req['status'] = 'rejected'
         req['updated_at'] = datetime.now().isoformat()
+        
+        # Track Admin Activity
+        admin_id = data.get('admin_id')
+        if admin_id:
+            req['processed_by'] = admin_id
+            admins = db.load(ADMIN_USERS_FILE)
+            if admin_id in admins:
+                stats = admins[admin_id].get('stats', {
+                    'total_processed_requests': 0,
+                    'total_processed_kyc': 0,
+                    'daily_actions': {}
+                })
+                stats['total_processed_requests'] = stats.get('total_processed_requests', 0) + 1
+                
+                today = datetime.now().strftime('%Y-%m-%d')
+                daily = stats.get('daily_actions', {})
+                daily[today] = daily.get(today, 0) + 1
+                stats['daily_actions'] = daily
+                
+                admins[admin_id]['stats'] = stats
+                db.save(ADMIN_USERS_FILE, admins)
+
         db.save(RENTAL_REQUESTS_FILE, requests)
         
         # Notify user
@@ -109,16 +160,23 @@ def manual_rental():
     if consoles[console_id].get('status') != 'available':
         return jsonify({'error': 'Console is not available'}), 400
         
+    # Get current discount
+    today = datetime.now().strftime('%Y-%m-%d')
+    discounts = db.load(DISCOUNTS_FILE)
+    day_rule = discounts.get(today, {})
+    discount_pct = day_rule.get('value', 0) if day_rule.get('type') == 'discount' else 0
+    
     rentals = db.load(RENTALS_FILE)
     rental_id = str(uuid.uuid4())
     
     rental = {
         'id': rental_id,
-        'user_id': 'admin_manual', # Placeholder for manual rentals
+        'user_id': 'admin_manual',
         'console_id': console_id,
         'start_time': datetime.now().isoformat(),
         'expected_end_time': (datetime.now() + timedelta(hours=int(hours))).isoformat(),
         'status': 'active',
+        'discount_percent': discount_pct,
         'total_cost': 0
     }
     
@@ -159,7 +217,14 @@ def terminate_rental():
     hours = max(1, round(duration.total_seconds() / 3600, 2)) # Min 1 hour charge or exact
     
     hourly_price = consoles.get(console_id, {}).get('rental_price', 0)
-    total_cost = round(hours * hourly_price, 2)
+    total_cost = hours * hourly_price
+    
+    # Apply discount if recorded in rental
+    discount_pct = active_rental.get('discount_percent', 0)
+    if discount_pct > 0:
+        total_cost = total_cost * (1 - discount_pct / 100)
+    
+    total_cost = round(total_cost, 2)
     
     # Update rental
     active_rental['status'] = 'completed'

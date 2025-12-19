@@ -40,16 +40,23 @@ export default function KYCPage() {
         fetchRequests()
     }, [])
 
+    const handleSelectRequest = (req) => {
+        setSelectedRequest(req)
+        setNote(req.admin_note || '')
+    }
+
     const handleAction = async (requestId, action) => {
         setActionLoading(true)
         try {
+            const adminId = localStorage.getItem('admin_id')
             const res = await fetch('http://localhost:5000/api/kyc/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     request_id: requestId,
                     action,
-                    note
+                    note,
+                    admin_id: adminId
                 })
             })
             if (res.ok) {
@@ -168,7 +175,7 @@ export default function KYCPage() {
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0 }}
                                             key={req.id}
-                                            onClick={() => setSelectedRequest(req)}
+                                            onClick={() => handleSelectRequest(req)}
                                             className={cn(
                                                 "hover:bg-white/[0.02] transition-colors cursor-pointer group",
                                                 selectedRequest?.id === req.id ? "bg-blue-600/5" : ""

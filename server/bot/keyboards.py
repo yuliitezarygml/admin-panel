@@ -8,7 +8,10 @@ def create_user_keyboard(help_button_text='ℹ️ Помощь', kyc_status='non
             types.KeyboardButton('📊 Мой кабинет'),
             types.KeyboardButton('📝 Арендовать')
         )
-        keyboard.add(types.KeyboardButton(help_button_text))
+        keyboard.add(
+            types.KeyboardButton('📅 Скидки'),
+            types.KeyboardButton(help_button_text)
+        )
     else:
         keyboard.add(
             types.KeyboardButton('🛡️ Верификация'),
@@ -38,9 +41,14 @@ def get_main_keyboard(is_admin=False, help_button_text='ℹ️ Помощь', ky
 def create_console_keyboard(consoles, category=None):
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     for cid, console in consoles.items():
-        if console.get('status') == 'available':
+        status = console.get('status', 'available')
+        if status == 'available':
             btn_text = f"🎮 {console['name']} - {console['rental_price']} MDL/ч"
-            keyboard.add(types.InlineKeyboardButton(btn_text, callback_data=f"select_console_{cid}"))
+        else:
+            btn_text = f"🔴 {console['name']} - Занята"
+        
+        keyboard.add(types.InlineKeyboardButton(btn_text, callback_data=f"select_console_{cid}"))
+    
     keyboard.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main"))
     return keyboard
 

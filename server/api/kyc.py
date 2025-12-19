@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from core.database import db, KYC_REQUESTS_FILE, USERS_FILE
+from core.database import db, KYC_REQUESTS_FILE, USERS_FILE, ADMIN_USERS_FILE
 from datetime import datetime
 import os
 import uuid
@@ -55,7 +55,29 @@ def kyc_action():
         users[user_id]['kyc_status'] = 'rejected'
     
     req['admin_note'] = admin_note
+    users[user_id]['kyc_note'] = admin_note
     req['processed_at'] = datetime.now().isoformat()
+    
+    # Track Admin Activity
+    admin_id = data.get('admin_id')
+    if admin_id:
+        req['processed_by'] = admin_id
+        admins = db.load(ADMIN_USERS_FILE)
+        if admin_id in admins:
+            stats = admins[admin_id].get('stats', {
+                'total_processed_requests': 0,
+                'total_processed_kyc': 0,
+                'daily_actions': {}
+            })
+            stats['total_processed_kyc'] = stats.get('total_processed_kyc', 0) + 1
+            
+            today = datetime.now().strftime('%Y-%m-%d')
+            daily = stats.get('daily_actions', {})
+            daily[today] = daily.get(today, 0) + 1
+            stats['daily_actions'] = daily
+            
+            admins[admin_id]['stats'] = stats
+            db.save(ADMIN_USERS_FILE, admins)
     
     save_kyc_requests(requests)
     db.save(USERS_FILE, users)

@@ -38,6 +38,8 @@ export default function AdminsPage() {
         role: 'staff',
         permissions: []
     })
+    const [report, setReport] = useState([])
+    const [currentAdmin, setCurrentAdmin] = useState(null)
 
     useEffect(() => {
         fetchAdmins()
@@ -48,10 +50,30 @@ export default function AdminsPage() {
             const res = await fetch('http://localhost:5000/api/admins')
             const data = await res.json()
             setAdmins(data)
+
+            // Fetch current user from local storage
+            const stored = localStorage.getItem('admin_user')
+            if (stored) {
+                const user = JSON.parse(stored)
+                setCurrentAdmin(user)
+                if (user.role === 'owner') {
+                    fetchReport()
+                }
+            }
         } catch (err) {
             console.error(err)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const fetchReport = async () => {
+        try {
+            const res = await fetch('http://localhost:5000/api/admins/reports/daily')
+            const data = await res.json()
+            setReport(data)
+        } catch (err) {
+            console.error(err)
         }
     }
 
@@ -138,8 +160,12 @@ export default function AdminsPage() {
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-indigo-600/20 flex items-center justify-center font-bold text-blue-400 border border-white/5 uppercase">
-                                        {admin.full_name?.[0]}
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-indigo-600/20 flex items-center justify-center font-bold text-blue-400 border border-white/5 overflow-hidden">
+                                        {admin.avatar_url ? (
+                                            <img src={`http://localhost:5000${admin.avatar_url}`} className="w-full h-full object-cover" alt="Avatar" />
+                                        ) : (
+                                            admin.full_name?.[0]
+                                        )}
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-gray-200">{admin.full_name}</h3>
@@ -152,6 +178,17 @@ export default function AdminsPage() {
                                 )}>
                                     {admin.role}
                                 </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                <div className="bg-white/5 p-2 rounded-xl text-center">
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Заявки</p>
+                                    <p className="text-sm font-bold text-blue-400">{admin.stats?.total_processed_requests || 0}</p>
+                                </div>
+                                <div className="bg-white/5 p-2 rounded-xl text-center">
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold">KYC</p>
+                                    <p className="text-sm font-bold text-indigo-400">{admin.stats?.total_processed_kyc || 0}</p>
+                                </div>
                             </div>
 
                             <div className="space-y-3 mb-6">
@@ -319,6 +356,77 @@ export default function AdminsPage() {
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* Performance Report for Owner */}
+            {currentAdmin?.role === 'owner' && report.length > 0 && (
+                <div className="mt-12 space-y-6">
+                    <div className="flex items-center gap-3">
+                        <TrendingUp className="text-blue-500" />
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Отчет по активности за сегодня</h2>
+                    </div>
+
+                    <div className="glass p-8 rounded-[32px] border border-white/5">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="text-gray-500 text-[10px] font-bold uppercase tracking-widest border-b border-white/5">
+                                    <th className="px-6 py-4">Сотрудник</th>
+                                    <th className="px-6 py-4">Активность сегодня</th>
+                                    <th className="px-6 py-4">Всего аренд</th>
+                                    <th className="px-6 py-4">Всего KYC</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {report.map(row => (
+                                    <tr key={row.id} className="hover:bg-white/[0.02] transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 font-bold overflow-hidden border border-white/5">
+                                                    {row.avatar_url ? (
+                                                        <img src={`http://localhost:5000${row.avatar_url}`} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        row.full_name[0]
+                                                    )}
+                                                </div>
+                                                <span className="font-medium">{row.full_name}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={cn(
+                                                "px-2 py-1 rounded-md text-xs font-bold",
+                                                row.today_actions > 0 ? "bg-blue-500/10 text-blue-400" : "bg-gray-800 text-gray-500"
+                                            )}>
+                                                {row.today_actions} действий
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-400">{row.total_requests}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-400">{row.total_kyc}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
+    )
+}
+
+function TrendingUp(props) {
+    return (
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+            <polyline points="16 7 22 7 22 13" />
+        </svg>
     )
 }

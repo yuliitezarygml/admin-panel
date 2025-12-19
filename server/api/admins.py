@@ -19,6 +19,13 @@ def ensure_super_admin():
             "password": hash_password("admin"),
             "full_name": "Администратор",
             "role": "owner",
+            "avatar_url": None,
+            "bio": "Главный администратор системы",
+            "stats": {
+                "total_processed_requests": 0,
+                "total_processed_kyc": 0,
+                "daily_actions": {} # Format: "YYYY-MM-DD": count
+            },
             "permissions": ["all"],
             "created_at": datetime.now().isoformat()
         }
@@ -50,6 +57,13 @@ def manage_admins():
             'password': hash_password(data.get('password', '123456')),
             'full_name': data.get('full_name', 'Новый админ'),
             'role': data.get('role', 'staff'),
+            'avatar_url': None,
+            'bio': '',
+            'stats': {
+                'total_processed_requests': 0,
+                'total_processed_kyc': 0,
+                'daily_actions': {}
+            },
             'permissions': data.get('permissions', []),
             'created_at': datetime.now().isoformat()
         }
@@ -104,8 +118,77 @@ def login():
     if 'password' in res: del res['password']
     return jsonify(res)
 
+@admins_api.route('/api/admins/profile', methods=['POST'])
+def update_profile():
+    data = request.json
+    admin_id = data.get('id')
+    admins = db.load(ADMIN_USERS_FILE)
+    
+    if admin_id in admins:
+        a = admins[admin_id]
+        a['full_name'] = data.get('full_name', a['full_name'])
+        a['bio'] = data.get('bio', a.get('bio', ''))
+        if data.get('password'):
+            a['password'] = hash_password(data.get('password'))
+        db.save(ADMIN_USERS_FILE, admins)
+        return jsonify({'success': True})
+    return jsonify({'error': 'Admin not found'}), 404
+
+@admins_api.route('/api/admins/avatar', methods=['POST'])
+def upload_avatar():
+    if 'avatar' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    
+    file = request.files['avatar']
+    admin_id = request.form.get('id')
+    
+    if file and admin_id:
+        import os
+        ext = file.filename.split('.')[-1]
+        filename = f"{admin_id}.{ext}"
+        save_dir = os.path.join('static', 'img', 'avatars')
+        if not os.path.exists(save_dir): os.makedirs(save_dir)
+        
+        save_path = os.path.join(save_dir, filename)
+        file.save(save_path)
+        
+        # Update DB
+        admins = db.load(ADMIN_USERS_FILE)
+        if admin_id in admins:
+            admins[admin_id]['avatar_url'] = f"/static/img/avatars/{filename}"
+            db.save(ADMIN_USERS_FILE, admins)
+            return jsonify({'success': True, 'url': admins[admin_id]['avatar_url']})
+            
+    return jsonify({'error': 'Invalid request'}), 400
+
+@admins_api.route('/api/admins/reports/daily', methods=['GET'])
+def get_daily_reports():
+    admins = db.load(ADMIN_USERS_FILE)
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    report = []
+    for a in admins.values():
+        daily_count = a.get('stats', {}).get('daily_actions', {}).get(today, 0)
+        report.append({
+            'id': a['id'],
+            'full_name': a['full_name'],
+            'avatar_url': a.get('avatar_url'),
+            'role': a['role'],
+            'today_actions': daily_count,
+            'total_requests': a.get('stats', {}).get('total_processed_requests', 0),
+            'total_kyc': a.get('stats', {}).get('total_processed_kyc', 0)
+        })
+    return jsonify(report)
+
 @admins_api.route('/api/admins/current', methods=['GET'])
 def get_current_admin():
-    # In a full app, this would check session/token. 
-    # For this implementation, we'll keep it simple but functional for the UI.
-    return jsonify({'id': 'any', 'full_name': 'Admin', 'role': 'owner', 'permissions': ['all']})
+    # In this implementation, we simulate session by allowing the frontend to pass an ID or fallback
+    admin_id = request.args.get('id', '31a58d38-ec27-4946-9fd0-371b6fa98ae3') # Fallback to default owner for demo
+    admins = db.load(ADMIN_USERS_FILE)
+    admin = admins.get(admin_id)
+    
+    if admin:
+        res = admin.copy()
+        if 'password' in res: del res['password']
+        return jsonify(res)
+    return jsonify({'error': 'Not logged in'}), 401

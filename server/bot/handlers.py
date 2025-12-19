@@ -1,8 +1,8 @@
 import os
 import uuid
 from bot.bot_core import get_bot
-from bot.keyboards import get_main_keyboard
-from core.database import db, USERS_FILE, SETTINGS_FILE, CONSOLES_FILE, RENTALS_FILE, RENTAL_REQUESTS_FILE
+from bot.keyboards import get_main_keyboard, create_console_keyboard, create_hours_keyboard
+from core.database import db, CONSOLES_FILE, SETTINGS_FILE, USERS_FILE, DISCOUNTS_FILE, RENTALS_FILE, RENTAL_REQUESTS_FILE, KYC_REQUESTS_FILE
 from datetime import datetime
 from telebot import types
 
@@ -70,21 +70,57 @@ def register_handlers(bot):
         if message.text == help_btn_text:
             print(f"ℹ️ User {user_id} requested help")
             bot.reply_to(message, help_text, parse_mode='Markdown')
+        elif message.text == '📅 Скидки':
+            print(f"📅 User {user_id} requested discounts")
+            discounts = db.load(DISCOUNTS_FILE)
+            
+            if not discounts:
+                bot.reply_to(message, "📅 *Календарь акций*\n\nНа ближайшее время акций не запланировано. Следите за обновлениями!", parse_mode='Markdown')
+                return
+            
+            # Sort upcoming discounts
+            now = datetime.now().strftime('%Y-%m-%d')
+            upcoming = []
+            for date, rule in sorted(discounts.items()):
+                if date >= now:
+                    type_label = "🔥 Скидка" if rule['type'] == 'discount' else "🛠 Перерыв"
+                    val = f" {rule['value']}%" if rule['type'] == 'discount' else ""
+                    desc = f" ({rule['description']})" if rule.get('description') else ""
+                    upcoming.append(f"• *{date}*: {type_label}{val}{desc}")
+
+            if not upcoming:
+                bot.reply_to(message, "📅 *Календарь акций*\n\nНа ближайшее время акций не запланировано.", parse_mode='Markdown')
+            else:
+                msg = "📅 *Предстоящие акции и события:*\n\n" + "\n".join(upcoming[:10])
+                bot.reply_to(message, msg, parse_mode='Markdown')
+
         elif message.text == '📝 Арендовать':
             if user_status != 'verified':
                 bot.reply_to(message, "⚠️ *Доступ ограничен*\n\nДля аренды консолей необходимо сначала пройти верификацию профиля. Нажмите кнопку «🛡️ Верификация» в меню.", parse_mode='Markdown')
                 return
 
             print(f"📝 User {user_id} started rental flow")
-            consoles = db.load(CONSOLES_FILE)
-            available = {cid: c for cid, c in consoles.items() if c.get('status') == 'available'}
             
-            if not available:
-                bot.reply_to(message, "❌ К сожалению, сейчас нет свободных консолей.")
+            # Check for Blackout
+            today = datetime.now().strftime('%Y-%m-%d')
+            discounts = db.load(DISCOUNTS_FILE)
+            day_rule = discounts.get(today)
+            
+            if day_rule and day_rule.get('type') == 'blackout':
+                msg = "🚫 *Технический перерыв*\n\n"
+                msg += f"Сегодня консоли недоступны для аренды: {day_rule.get('description', 'Профилактические работы')}.\n\nПриходите завтра!"
+                bot.reply_to(message, msg, parse_mode='Markdown')
+                return
+
+            # Continue with rental...
+            consoles = db.load(CONSOLES_FILE)
+            
+            if not consoles:
+                bot.reply_to(message, "❌ Список консолей пуст.")
                 return
                 
             from bot.keyboards import create_console_keyboard
-            bot.reply_to(message, "🎮 Выберите консоль для аренды:", reply_markup=create_console_keyboard(available))
+            bot.reply_to(message, "🎮 Выберите консоль для аренды:", reply_markup=create_console_keyboard(consoles))
         elif message.text == '🛡️ Верификация':
             users = db.load(USERS_FILE)
             user_status = users.get(user_id, {}).get('kyc_status', 'none')
@@ -172,18 +208,49 @@ def register_handlers(bot):
         consoles = db.load(CONSOLES_FILE)
         console = consoles.get(console_id)
         
-        if not console or console.get('status') != 'available':
-            bot.answer_callback_query(call.id, "❌ Эта консоль уже не доступна.")
+        if not console:
+            bot.answer_callback_query(call.id, "❌ Консоль не найдена.")
             return
 
+        if console.get('status') == 'rented':
+            rentals = db.load(RENTALS_FILE)
+            active_rental = None
+            for rid, r in rentals.items():
+                if r.get('console_id') == console_id and r.get('status') == 'active':
+                    active_rental = r
+                    break
+            
+            msg = f"🔴 *{console['name']}* сейчас занята.\n\n"
+            if active_rental and active_rental.get('expected_end_time'):
+                end_time = datetime.fromisoformat(active_rental['expected_end_time'])
+                msg += f"Ожидаемое время освобождения: *{end_time.strftime('%H:%M')}* ({end_time.strftime('%d.%m')})"
+            else:
+                msg += "Ожидайте освобождения."
+            
+            bot.answer_callback_query(call.id, "⚠️ Консоль занята")
+            bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+            return
+
+        # Calculate Price with Discount
+        base_price = console['rental_price']
+        final_price = base_price
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        discounts = db.load(DISCOUNTS_FILE)
+        day_rule = discounts.get(today)
+        
+        price_text = f"💰 Цена: {base_price} MDL/ч"
+        if day_rule and day_rule.get('type') == 'discount':
+            discount_val = day_rule.get('value', 0)
+            final_price = round(base_price * (1 - discount_val / 100))
+            price_text = f"💰 Цена: ~~{base_price}~~ *{final_price} MDL/ч* (Скидка {discount_val}%! 🔥)"
+
         from bot.keyboards import create_hours_keyboard
-        text = f"🎮 *{console['name']}*\n💰 Цена: {console['rental_price']} MDL/ч\n\nВыберите время аренды:"
+        text = f"🎮 *{console['name']}*\n{price_text}\n\nВыберите время аренды:"
         
         # Send/Edit with photo if exists
         photo_path = console.get('photo_path')
         if photo_path and console.get('show_photo_in_bot', True):
-            # Photo path is usually /static/img/console/ID.jpg
-            # We need the absolute path for telebot
             local_path = os.path.join(os.getcwd(), photo_path.lstrip('/'))
             if os.path.exists(local_path):
                 with open(local_path, 'rb') as photo:

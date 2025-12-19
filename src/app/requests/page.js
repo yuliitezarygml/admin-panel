@@ -43,10 +43,11 @@ export default function RequestsPage() {
     const handleAction = async (id, action) => {
         setProcessingId(id)
         try {
+            const adminId = localStorage.getItem('admin_id')
             const res = await fetch('http://localhost:5000/api/requests/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, action })
+                body: JSON.stringify({ id, action, admin_id: adminId })
             })
             if (res.ok) {
                 await fetchRequests()
@@ -108,8 +109,8 @@ export default function RequestsPage() {
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: idx * 0.05 }}
                                 className={`glass p-6 rounded-3xl border transition-all ${request.status === 'pending'
-                                        ? 'border-blue-500/20 bg-blue-500/[0.02]'
-                                        : 'border-white/5 opacity-80'
+                                    ? 'border-blue-500/20 bg-blue-500/[0.02]'
+                                    : 'border-white/5 opacity-80'
                                     }`}
                             >
                                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -161,8 +162,8 @@ export default function RequestsPage() {
                                             </>
                                         ) : (
                                             <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${request.status === 'approved'
-                                                    ? 'bg-green-500/10 text-green-400'
-                                                    : 'bg-red-500/10 text-red-400'
+                                                ? 'bg-green-500/10 text-green-400'
+                                                : 'bg-red-500/10 text-red-400'
                                                 }`}>
                                                 {request.status === 'approved' ? 'Одобрена' : 'Отклонена'}
                                             </span>

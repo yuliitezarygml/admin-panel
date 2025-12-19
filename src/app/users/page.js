@@ -12,7 +12,9 @@ import {
     History,
     Gamepad2,
     Clock,
-    DollarSign
+    DollarSign,
+    ShieldCheck,
+    ShieldAlert
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -185,6 +187,41 @@ export default function UsersPage() {
                                     <XCircle size={24} />
                                 </button>
                             </div>
+
+                            {/* Verification Info */}
+                            {(selectedUser.kyc_status || selectedUser.kyc_note) && (
+                                <div className="mb-8 p-6 rounded-2xl bg-white/5 border border-white/5 flex flex-col gap-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            {selectedUser.kyc_status === 'verified' ? (
+                                                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
+                                                    <ShieldCheck size={18} />
+                                                </div>
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500">
+                                                    <ShieldAlert size={18} />
+                                                </div>
+                                            )}
+                                            <span className="font-bold text-gray-200">Статус верификации</span>
+                                        </div>
+                                        <span className={cn(
+                                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                            selectedUser.kyc_status === 'verified' ? "bg-green-500/10 text-green-500" :
+                                                selectedUser.kyc_status === 'pending' ? "bg-blue-500/10 text-blue-400" :
+                                                    "bg-gray-500/10 text-gray-500"
+                                        )}>
+                                            {selectedUser.kyc_status === 'verified' ? "Подтвержден" :
+                                                selectedUser.kyc_status === 'pending' ? "Ожидает" : "Не верифицирован"}
+                                        </span>
+                                    </div>
+                                    {selectedUser.kyc_note && (
+                                        <div className="pl-11 pt-2 border-t border-white/5 text-sm">
+                                            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Примечание администратора:</p>
+                                            <p className="text-gray-300 italic">"{selectedUser.kyc_note}"</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                                 {selectedUser.rentals?.length === 0 ? (

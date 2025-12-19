@@ -16,9 +16,11 @@ import {
     TrendingUp,
     Clock,
     Wallet,
+    FileCheck,
+    CalendarDays,
+    User,
     UserPlus,
-    ShieldCheck,
-    FileCheck
+    ShieldCheck
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -29,11 +31,13 @@ const navItems = [
     { icon: LayoutDashboard, label: "Дашборд", id: "dashboard", href: "/" },
     { icon: Gamepad2, label: "Консоли", id: "consoles", href: "/consoles" },
     { icon: Bell, label: "Заявки", id: "requests", href: "/requests", badge: true },
+    { icon: FileCheck, label: "Верификация", id: "kyc", href: "/kyc", badge: true },
+    { icon: CalendarDays, label: "Бронирование", id: "calendar", href: "/calendar" },
     { icon: UserPlus, label: "Пользователи", id: "users", href: "/users" },
     { icon: History, label: "История", id: "history", href: "/history" },
     { icon: Wallet, label: "Финансы", id: "finance", href: "/finance" },
-    { icon: FileCheck, label: "Верификация", id: "kyc", href: "/kyc", badge: true },
     { icon: ShieldCheck, label: "Сотрудники", id: "admins", href: "/admins" },
+    { icon: User, label: "Мой профиль", id: "profile", href: "/profile" },
     { icon: Settings, label: "Настройки", id: "settings", href: "/settings" },
 ]
 
@@ -57,6 +61,21 @@ export default function DashboardLayout({ children }) {
             setIsLoggedIn(true)
         } else if (!isLoginPage) {
             router.push('/login')
+        }
+
+        // Fetch latest profile data to get avatar/etc
+        if (storedUser) {
+            const user = JSON.parse(storedUser)
+            fetch(`http://localhost:5000/api/admins/current?id=${user.id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.error) {
+                        setCurrentAdmin(data)
+                        localStorage.setItem('admin_user', JSON.stringify(data))
+                        localStorage.setItem('admin_id', data.id)
+                    }
+                })
+                .catch(err => console.error(err))
         }
 
         audioRef.current = new Audio("/sound/z_uk-budte-vkontakte-s-no_ostyami.mp3")
@@ -87,7 +106,7 @@ export default function DashboardLayout({ children }) {
             }
 
             fetchCounts()
-            const interval = setInterval(fetchCounts, 10000)
+            const interval = setInterval(fetchCounts, 30000)
             return () => clearInterval(interval)
         }
     }, [pathname])
@@ -221,20 +240,24 @@ export default function DashboardLayout({ children }) {
                                 </h1>
                             </div>
 
-                            <div className="flex items-center gap-6">
+                            <Link href="/profile" className="flex items-center gap-6 group">
                                 <div className="flex flex-col items-end">
-                                    <span className="text-sm font-medium text-gray-200">
+                                    <span className="text-sm font-medium text-gray-200 group-hover:text-blue-400 transition-colors">
                                         {currentAdmin?.full_name || 'Загрузка...'}
                                     </span>
-                                    <span className="text-xs text-green-500 flex items-center gap-1.5">
+                                    <span className="text-xs text-green-500 flex items-center gap-1.5 uppercase tracking-wider font-bold opacity-80">
                                         <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                                         {currentAdmin?.role || 'Online'}
                                     </span>
                                 </div>
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600/30 to-indigo-600/30 border border-white/10 flex items-center justify-center font-bold text-blue-400">
-                                    {currentAdmin?.full_name?.[0] || 'A'}
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600/30 to-indigo-600/30 border border-white/10 flex items-center justify-center font-bold text-blue-400 overflow-hidden shadow-lg group-hover:border-blue-500/50 transition-all active:scale-95">
+                                    {currentAdmin?.avatar_url ? (
+                                        <img src={`http://localhost:5000${currentAdmin.avatar_url}`} className="w-full h-full object-cover" alt="Avatar" />
+                                    ) : (
+                                        currentAdmin?.full_name?.[0] || 'A'
+                                    )}
                                 </div>
-                            </div>
+                            </Link>
                         </header>
                     )}
 
