@@ -1,14 +1,19 @@
 from telebot import types
 
-def create_user_keyboard(help_button_text='ℹ️ Помощь'):
+def create_user_keyboard(help_button_text='ℹ️ Помощь', kyc_status='none'):
     keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-    keyboard.add(
-        types.KeyboardButton('📊 Мой кабинет'),
-        types.KeyboardButton('📝 Арендовать')
-    )
-    keyboard.add(
-        types.KeyboardButton(help_button_text)
-    )
+    
+    if kyc_status == 'verified':
+        keyboard.add(
+            types.KeyboardButton('📊 Мой кабинет'),
+            types.KeyboardButton('📝 Арендовать')
+        )
+        keyboard.add(types.KeyboardButton(help_button_text))
+    else:
+        keyboard.add(
+            types.KeyboardButton('🛡️ Верификация'),
+            types.KeyboardButton(help_button_text)
+        )
     return keyboard
 
 def create_admin_keyboard(help_button_text='ℹ️ Помощь'):
@@ -27,8 +32,8 @@ def create_admin_keyboard(help_button_text='ℹ️ Помощь'):
     )
     return keyboard
 
-def get_main_keyboard(is_admin=False, help_button_text='ℹ️ Помощь'):
-    return create_admin_keyboard(help_button_text) if is_admin else create_user_keyboard(help_button_text)
+def get_main_keyboard(is_admin=False, help_button_text='ℹ️ Помощь', kyc_status='none'):
+    return create_admin_keyboard(help_button_text) if is_admin else create_user_keyboard(help_button_text, kyc_status)
 
 def create_console_keyboard(consoles, category=None):
     keyboard = types.InlineKeyboardMarkup(row_width=1)

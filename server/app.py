@@ -8,6 +8,7 @@ from api.users import users_api
 from api.history import history_api
 from api.health import health_api
 from api.admins import admins_api
+from api.kyc import kyc_api
 from bot.bot_core import get_bot
 from bot.handlers import register_handlers
 import os
@@ -26,6 +27,7 @@ app.register_blueprint(users_api)
 app.register_blueprint(history_api)
 app.register_blueprint(health_api)
 app.register_blueprint(admins_api)
+app.register_blueprint(kyc_api)
 
 @app.route('/static/<path:path>')
 def send_static(path):

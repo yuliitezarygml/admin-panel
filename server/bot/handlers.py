@@ -25,15 +25,17 @@ def register_handlers(bot):
                 'username': message.from_user.username,
                 'first_name': message.from_user.first_name,
                 'joined_at': datetime.now().isoformat(),
-                'is_banned': False
+                'is_banned': False,
+                'kyc_status': 'none'
             }
             db.save(USERS_FILE, users)
         
+        user_status = users.get(user_id, {}).get('kyc_status', 'none')
         welcome_text = f"👋 Привет, {message.from_user.first_name}!\n\nДобро пожаловать в PlayStation Rental. Используйте меню ниже для навигации."
         if is_admin:
             welcome_text += "\n\n🛠 Вы вошли как администратор."
             
-        bot.reply_to(message, welcome_text, reply_markup=get_main_keyboard(is_admin, help_btn_text))
+        bot.reply_to(message, welcome_text, reply_markup=get_main_keyboard(is_admin, help_btn_text, user_status))
 
     @bot.message_handler(func=lambda m: m.text == '📊 Мой кабинет')
     def my_cabinet(message):
@@ -42,9 +44,13 @@ def register_handlers(bot):
         users = db.load(USERS_FILE)
         user = users.get(user_id, {})
         
+        kyc_status = user.get('kyc_status', 'none')
+        kyc_label = "✅ Верифицирован" if kyc_status == 'verified' else "⏳ Ожидает" if kyc_status == 'pending' else "❌ Не верифицирован"
+        
         stats_text = f"👤 **Ваш кабинет**\n\n"
         stats_text += f"📅 Дата регистрации: {user.get('joined_at', 'Неизвестно')[:10]}\n"
         stats_text += f"🎮 Всего аренд: {len(user.get('rentals', []))}\n"
+        stats_text += f"🛡️ Статус: {kyc_label}\n"
         
         bot.reply_to(message, stats_text, parse_mode='Markdown')
 
@@ -52,6 +58,10 @@ def register_handlers(bot):
     def handle_all_messages(message):
         user_id = str(message.from_user.id)
         settings = db.load(SETTINGS_FILE)
+        users = db.load(USERS_FILE)
+        user = users.get(user_id, {})
+        user_status = user.get('kyc_status', 'none')
+
         help_btn_text = settings.get('help_button_text', 'ℹ️ Помощь')
         help_text = settings.get('help_text', 'Текст помощи еще не настроен администратором.')
         
@@ -61,6 +71,10 @@ def register_handlers(bot):
             print(f"ℹ️ User {user_id} requested help")
             bot.reply_to(message, help_text, parse_mode='Markdown')
         elif message.text == '📝 Арендовать':
+            if user_status != 'verified':
+                bot.reply_to(message, "⚠️ *Доступ ограничен*\n\nДля аренды консолей необходимо сначала пройти верификацию профиля. Нажмите кнопку «🛡️ Верификация» в меню.", parse_mode='Markdown')
+                return
+
             print(f"📝 User {user_id} started rental flow")
             consoles = db.load(CONSOLES_FILE)
             available = {cid: c for cid, c in consoles.items() if c.get('status') == 'available'}
@@ -71,6 +85,20 @@ def register_handlers(bot):
                 
             from bot.keyboards import create_console_keyboard
             bot.reply_to(message, "🎮 Выберите консоль для аренды:", reply_markup=create_console_keyboard(available))
+        elif message.text == '🛡️ Верификация':
+            users = db.load(USERS_FILE)
+            user_status = users.get(user_id, {}).get('kyc_status', 'none')
+            
+            if user_status == 'verified':
+                bot.reply_to(message, "✅ Вы уже верифицированы!")
+                return
+            if user_status == 'pending':
+                bot.reply_to(message, "⏳ Ваша заявка уже на проверке. Ожидайте.")
+                return
+                
+            msg = bot.reply_to(message, "🛡️ *Верификация профиля*\n\nПожалуйста, отправьте ОДНО фото вашего документа (паспорт или права) для подтверждения личности.\n\n*Важно:* Фото должно быть четким, все данные должны быть читаемы.", parse_mode='Markdown')
+            bot.register_next_step_handler(msg, process_kyc_photo)
+
         elif message.text == '⚙️ Админ панель':
             if str(user_id) == str(settings.get('admin_chat_id')):
                 bot.reply_to(message, "🛠 *Админ панель управления*\n\nВы можете управлять системой через веб-интерфейс:\n🔗 [Открыть панель](http://localhost:3000)", parse_mode='Markdown')
@@ -81,6 +109,62 @@ def register_handlers(bot):
                 active = len([r for r in rentals.values() if r.get('status') == 'active'])
                 stats = f"📈 *Статистика системы*\n\n✅ Активных аренд: {active}\n🎮 Всего консолей: {len(consoles)}\n👥 Всего пользователей: {len(db.load(USERS_FILE))}"
                 bot.reply_to(message, stats, parse_mode='Markdown')
+
+    def process_kyc_photo(message):
+        if not message.photo:
+            bot.reply_to(message, "❌ Пожалуйста, отправьте именно фото.")
+            return
+
+        user_id = str(message.from_user.id)
+        print(f"📸 Received KYC photo from {user_id}")
+        
+        try:
+            # Create KYC folder if not exists
+            kyc_dir = os.path.join('static', 'img', 'kyc')
+            if not os.path.exists(kyc_dir): os.makedirs(kyc_dir)
+            
+            # Download photo
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            filename = f"{user_id}_{uuid.uuid4().hex[:8]}.jpg"
+            save_path = os.path.join(kyc_dir, filename)
+            
+            with open(save_path, 'wb') as f:
+                f.write(downloaded_file)
+                
+            photo_url = f"/static/img/kyc/{filename}"
+            
+            # Create request in DB
+            from core.database import KYC_REQUESTS_FILE
+            requests = db.load(KYC_REQUESTS_FILE)
+            
+            req_id = str(uuid.uuid4())
+            requests[req_id] = {
+                'user_id': user_id,
+                'photo_url': photo_url,
+                'status': 'pending',
+                'timestamp': datetime.now().isoformat()
+            }
+            db.save(KYC_REQUESTS_FILE, requests)
+            
+            # Update user status
+            users = db.load(USERS_FILE)
+            if user_id in users:
+                users[user_id]['kyc_status'] = 'pending'
+                db.save(USERS_FILE, users)
+                
+            bot.reply_to(message, "✅ Фото получено! Администрация проверит ваши данные в течение 24 часов.")
+            
+            # Notify Admin
+            settings = db.load(SETTINGS_FILE)
+            admin_id = settings.get('admin_chat_id')
+            if admin_id:
+                bot.send_message(admin_id, f"🔔 *Новая заявка на верификацию!*\n\n👤 От: {message.from_user.first_name} (@{message.from_user.username})", parse_mode='Markdown')
+                
+        except Exception as e:
+            print(f"Error processing KYC photo: {e}")
+            bot.reply_to(message, "❌ Произошла ошибка при сохранении фото. Попробуйте позже.")
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith('select_console_'))
     def select_console(call):
